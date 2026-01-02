@@ -57,8 +57,8 @@ make clean
 To create a new release:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.2
+git push origin v1.0.2
 ```
 
 This will automatically trigger GitHub Actions to build and release binaries for all
