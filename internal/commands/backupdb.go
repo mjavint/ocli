@@ -49,7 +49,7 @@ the backup file in the specified directory.`,
 			// Build the dump file path first
 			dumpFile := utils.GetBackupFilePath(dumpPath, dbName, backupFormat, noFilestore)
 			// Build command arguments: odoo-bin db -c config dump database output_file -f format
-			cmdArgs := []string{"db", "-c", configPath, "dump", dbName, dumpFile, "--format=" + backupFormat}
+			cmdArgs := []string{"db", "-c", configPath, "dump", dbName, dumpFile}
 
 			// Add no-filestore flag if specified
 			if noFilestore {
