@@ -12,7 +12,7 @@ import (
 func TestNewLogger(t *testing.T) {
 	logger := NewLogger()
 	if logger == nil {
-		t.Error("NewLogger() should not return nil")
+		t.Fatal("NewLogger() should not return nil")
 	}
 
 	if logger.log == nil {

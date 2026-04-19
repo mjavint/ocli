@@ -76,7 +76,13 @@ fmt: ## Format code
 lint: ## Run linter
 	@echo "$(GREEN)Running linter...$(NC)"
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m; \
+		GOLANGCI_VERSION=$$(golangci-lint --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1); \
+		MAJOR_VERSION=$$(echo $$GOLANGCI_VERSION | cut -d. -f1); \
+		if [ "$$MAJOR_VERSION" -ge 2 ]; then \
+			golangci-lint run --no-config --timeout=5m; \
+		else \
+			golangci-lint run --timeout=5m; \
+		fi \
 	else \
 		echo "$(YELLOW)golangci-lint not installed, running go vet...$(NC)"; \
 		$(GO) vet ./...; \

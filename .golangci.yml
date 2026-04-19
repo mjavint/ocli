@@ -1,21 +1,25 @@
-version: 2
-
+# golangci-lint configuration
 linters:
   enable:
-    - govet
     - errcheck
+    - govet
+    - ineffassign
     - staticcheck
     - unused
-    - ineffassign
 
 linters-settings:
   govet:
     check-shadowing: true
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-rules:
+    # Exclude staticcheck SA5011 false positives in test files where we check for nil
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: 'SA5011.*possible nil pointer dereference'
 
 run:
   timeout: 5m

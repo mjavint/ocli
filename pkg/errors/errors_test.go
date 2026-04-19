@@ -10,7 +10,7 @@ func TestNewError(t *testing.T) {
 	wrappedErr := errors.New("wrapped error")
 	err := NewError(ErrCodeInvalidConfig, "test error", wrappedErr)
 	if err == nil {
-		t.Error("NewError should not return nil")
+		t.Fatal("NewError should not return nil")
 	}
 
 	if err.Code != ErrCodeInvalidConfig {
