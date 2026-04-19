@@ -54,7 +54,20 @@ make clean
 
 ## Release
 
-To create a new release:
+### Using the tag script (recommended)
+
+```bash
+# Create a new tag and push it
+./tag.sh create v1.0.2
+
+# List recent tags
+./tag.sh list
+
+# Delete a tag (local and remote)
+./tag.sh delete v1.0.2
+```
+
+### Manual release
 
 ```bash
 git tag v1.0.2
