@@ -3,6 +3,10 @@ ocli
 ocli-*
 bin/
 
+# Test coverage
+coverage.out
+coverage.html
+
 # Go
 *.exe
 *.exe~

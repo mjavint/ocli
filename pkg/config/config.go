@@ -1,32 +1,29 @@
 package config
 
 import (
-	"bufio"
-	"errors"
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
-	"github.com/spf13/viper"
+	"github.com/mjavint/ocli/pkg/constants"
 )
 
+// Config represents the application configuration
 type Config struct {
 	Odoo OdooConfig `mapstructure:"odoo"`
 	DB   DBSection  `mapstructure:"db"`
 }
 
+// OdooConfig represents Odoo-specific configuration
 type OdooConfig struct {
 	ConfigFile string   `mapstructure:"config_file"`
 	OdooBin    string   `mapstructure:"odoo_bin"`
 	Addons     []string `mapstructure:"addons"`
 }
 
+// DBSection represents database-specific configuration
 type DBSection struct {
 	DumpPath   string `mapstructure:"dump_path"`
 	DumpFormat string `mapstructure:"dump_format"`
 }
 
+// DBConfig represents database connection configuration
 type DBConfig struct {
 	Host     string
 	Port     int
@@ -34,90 +31,26 @@ type DBConfig struct {
 	Password string
 }
 
+// AppConfig is the global configuration instance (for backward compatibility)
 var AppConfig Config
 
+// LoadConfig loads the application configuration (legacy function)
+// This is maintained for backward compatibility
 func LoadConfig() {
-	// Primero verificar si el archivo de configuración existe
-	configFile := "ocli.yml"
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		// El archivo no existe, establecer valores predeterminados
-		AppConfig = Config{
-			Odoo: OdooConfig{
-				ConfigFile: "/workspace/odoo.conf",
-				OdooBin:    "/workspace/odoo/odoo-bin",
-				Addons:     []string{},
-			},
-			DB: DBSection{
-				DumpPath:   "/workspace/dbs",
-				DumpFormat: "zip",
-			},
-		}
+	manager := NewConfigManager(constants.DefaultConfigFile)
+	if err := manager.Load(); err != nil {
+		// Fallback to defaults on error
+		AppConfig = *manager.getDefaultConfig()
 		return
 	}
-
-	// El archivo existe, intentar cargarlo
-	viper.SetConfigFile(configFile)
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		panic(fmt.Errorf("error leyendo archivo de configuración: %w", err))
+	if manager.config != nil {
+		AppConfig = *manager.config
 	}
-	viper.Unmarshal(&AppConfig)
 }
 
-// LoadOdooDBParams extrae los parámetros de BD del archivo de configuración
+// LoadOdooDBParams extracts database parameters from Odoo config file (legacy function)
+// This is maintained for backward compatibility
 func LoadOdooDBParams(configPath string) (*DBConfig, error) {
-	file, err := os.Open(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error abriendo %s: %w", configPath, err)
-	}
-	defer file.Close()
-
-	dbConfig := &DBConfig{}
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		// Ignorar líneas vacías, comentarios y secciones
-		if line == "" ||
-			strings.HasPrefix(line, ";") ||
-			strings.HasPrefix(line, "#") ||
-			(strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]")) {
-			continue
-		}
-
-		// Procesar clave-valor
-		if parts := strings.SplitN(line, "=", 2); len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-
-			switch key {
-			case "db_host":
-				dbConfig.Host = value
-			case "db_port":
-				port, err := strconv.Atoi(value)
-				if err != nil {
-					return nil, fmt.Errorf("error convirtiendo db_port a entero: %w", err)
-				}
-				dbConfig.Port = port
-			case "db_user":
-				dbConfig.User = value
-			case "db_password":
-				dbConfig.Password = value
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error leyendo archivo: %w", err)
-	}
-
-	// Validar que todos los parámetros necesarios existan
-	if dbConfig.Host == "" || dbConfig.Port == 0 ||
-		dbConfig.User == "" || dbConfig.Password == "" {
-		return nil, errors.New("faltan parámetros de base de datos en el archivo de configuración")
-	}
-
-	return dbConfig, nil
+	parser := NewOdooConfigParser()
+	return parser.ParseDBParams(configPath)
 }

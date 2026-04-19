@@ -29,7 +29,10 @@ func NewStartOdooCmd() *cobra.Command {
 				odooBin:    config.AppConfig.Odoo.OdooBin,    // Ruta al binario de Odoo
 				configPath: config.AppConfig.Odoo.ConfigFile, // Ruta al archivo de configuración
 			}
-			cfg.startOdooServer()
+			if err := cfg.startOdooServer(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 		},
 	}
 	return cmd

@@ -1,4 +1,4 @@
-.PHONY: help install build build-all build-linux build-darwin build-windows clean test
+.PHONY: help install build build-all build-linux build-darwin build-windows clean test coverage coverage-html lint fmt
 
 # Variables
 BINARY_NAME=ocli
@@ -56,6 +56,32 @@ build-windows: ## Build for Windows (amd64)
 test: ## Run tests
 	@echo "$(GREEN)Running tests...$(NC)"
 	$(GO) test -v ./...
+
+coverage: ## Run tests with coverage report
+	@echo "$(GREEN)Running tests with coverage...$(NC)"
+	$(GO) test ./... -coverprofile=coverage.out
+	@echo "$(GREEN)Coverage summary:$(NC)"
+	$(GO) tool cover -func=coverage.out | tail -1
+	@echo "$(YELLOW)To see detailed coverage in browser: go tool cover -html=coverage.out$(NC)"
+
+coverage-html: coverage ## Generate HTML coverage report
+	@echo "$(GREEN)Opening coverage report in browser...$(NC)"
+	$(GO) tool cover -html=coverage.out
+
+fmt: ## Format code
+	@echo "$(GREEN)Formatting code...$(NC)"
+	$(GO) fmt ./...
+	@echo "$(GREEN)Code formatted$(NC)"
+
+lint: ## Run linter
+	@echo "$(GREEN)Running linter...$(NC)"
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --timeout=5m; \
+	else \
+		echo "$(YELLOW)golangci-lint not installed, running go vet...$(NC)"; \
+		$(GO) vet ./...; \
+	fi
+	@echo "$(GREEN)Linting complete$(NC)"
 
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"

@@ -8,10 +8,31 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/mjavint/ocli/pkg/constants"
+	apperrors "github.com/mjavint/ocli/pkg/errors"
+	"github.com/mjavint/ocli/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.New()
+// Global logger instance for backward compatibility
+var log = logger.NewLogger().GetLogger()
+
+// PostgresDB implements database operations for PostgreSQL
+type PostgresDB struct {
+	config *PGConfig
+	logger *logger.Logger
+}
+
+// NewPostgresDB creates a new PostgreSQL database manager
+func NewPostgresDB(config *PGConfig, log *logger.Logger) *PostgresDB {
+	if log == nil {
+		log = logger.NewLogger()
+	}
+	return &PostgresDB{
+		config: config,
+		logger: log,
+	}
+}
 
 // PGConfig represents PostgreSQL connection configuration
 type PGConfig struct {
@@ -26,67 +47,121 @@ type PGConfig struct {
 	ConnMaxIdleTime time.Duration
 }
 
+// GetHost returns the database host
+func (c *PGConfig) GetHost() string {
+	return c.Host
+}
+
+// GetPort returns the database port
+func (c *PGConfig) GetPort() int {
+	return c.Port
+}
+
+// GetUser returns the database user
+func (c *PGConfig) GetUser() string {
+	return c.User
+}
+
+// GetPassword returns the database password
+func (c *PGConfig) GetPassword() string {
+	return c.Password
+}
+
+// GetSSLMode returns the SSL mode
+func (c *PGConfig) GetSSLMode() string {
+	return c.SSLMode
+}
+
+// GetMaxOpenConns returns the maximum open connections
+func (c *PGConfig) GetMaxOpenConns() int {
+	return c.MaxOpenConns
+}
+
+// GetMaxIdleConns returns the maximum idle connections
+func (c *PGConfig) GetMaxIdleConns() int {
+	return c.MaxIdleConns
+}
+
+// GetConnMaxLifetime returns the connection maximum lifetime
+func (c *PGConfig) GetConnMaxLifetime() time.Duration {
+	return c.ConnMaxLifetime
+}
+
+// GetConnMaxIdleTime returns the connection maximum idle time
+func (c *PGConfig) GetConnMaxIdleTime() time.Duration {
+	return c.ConnMaxIdleTime
+}
+
 // DefaultPGConfig returns a config with sensible defaults
 func DefaultPGConfig() *PGConfig {
 	return &PGConfig{
-		Host:            "localhost",
-		Port:            5432,
-		User:            "postgres",
-		SSLMode:         "disable",
-		MaxOpenConns:    25,
-		MaxIdleConns:    5,
-		ConnMaxLifetime: 5 * time.Minute,
-		ConnMaxIdleTime: 1 * time.Minute,
+		Host:            constants.DefaultDBHost,
+		Port:            constants.DefaultDBPort,
+		User:            constants.DefaultDBUser,
+		SSLMode:         constants.DefaultSSLMode,
+		MaxOpenConns:    constants.DefaultMaxOpenConns,
+		MaxIdleConns:    constants.DefaultMaxIdleConns,
+		ConnMaxLifetime: constants.DefaultConnMaxLifetime,
+		ConnMaxIdleTime: constants.DefaultConnMaxIdleTime,
 	}
 }
 
 // Connect connects to a PostgreSQL database with context support
-func Connect(ctx context.Context, dbname string, cfg *PGConfig) (*sql.DB, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("postgres config is nil")
+func (pg *PostgresDB) Connect(ctx context.Context, dbname string) (*sql.DB, error) {
+	if pg.config == nil {
+		return nil, apperrors.NewInvalidConfigError("postgres config is nil", nil)
 	}
 
-	sslMode := cfg.SSLMode
+	sslMode := pg.config.SSLMode
 	if sslMode == "" {
-		sslMode = "disable"
+		sslMode = constants.DefaultSSLMode
 	}
 
-	connStr := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host,
-		cfg.Port,
-		cfg.User,
-		cfg.Password,
-		dbname,
-		sslMode,
-	)
+	connStr := pg.buildConnectionString(dbname, sslMode)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open connection: %w", err)
+		return nil, apperrors.NewDatabaseConnectionError("failed to open connection", err)
 	}
 
-	// Configure connection pool
-	if cfg.MaxOpenConns > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConns)
-	}
-	if cfg.MaxIdleConns > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConns)
-	}
-	if cfg.ConnMaxLifetime > 0 {
-		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-	}
-	if cfg.ConnMaxIdleTime > 0 {
-		db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
-	}
+	pg.configureConnectionPool(db)
 
 	// Verify connection with context
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		_ = db.Close()
+		return nil, apperrors.NewDatabaseConnectionError("failed to ping database", err)
 	}
 
 	return db, nil
+}
+
+// buildConnectionString builds the PostgreSQL connection string
+func (pg *PostgresDB) buildConnectionString(dbname, sslMode string) string {
+	return fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		pg.config.Host,
+		pg.config.Port,
+		pg.config.User,
+		pg.config.Password,
+		dbname,
+		sslMode,
+	)
+}
+
+// configureConnectionPool configures the database connection pool
+func (pg *PostgresDB) configureConnectionPool(db *sql.DB) {
+	if pg.config.MaxOpenConns > 0 {
+		db.SetMaxOpenConns(pg.config.MaxOpenConns)
+	}
+	if pg.config.MaxIdleConns > 0 {
+		db.SetMaxIdleConns(pg.config.MaxIdleConns)
+	}
+	if pg.config.ConnMaxLifetime > 0 {
+		db.SetConnMaxLifetime(pg.config.ConnMaxLifetime)
+	}
+	if pg.config.ConnMaxIdleTime > 0 {
+		db.SetConnMaxIdleTime(pg.config.ConnMaxIdleTime)
+	}
 }
 
 // CloseDB closes a database connection safely
@@ -97,13 +172,24 @@ func CloseDB(db *sql.DB) error {
 	return nil
 }
 
+// Close closes a database connection (method version)
+func (pg *PostgresDB) Close(db *sql.DB) error {
+	return CloseDB(db)
+}
+
+// Connect is a legacy wrapper for backward compatibility
+func Connect(ctx context.Context, dbname string, cfg *PGConfig) (*sql.DB, error) {
+	pg := NewPostgresDB(cfg, nil)
+	return pg.Connect(ctx, dbname)
+}
+
 // DBExists checks if a database exists
 func DBExists(ctx context.Context, dbname string, cfg *PGConfig) (bool, error) {
 	db, err := Connect(ctx, "postgres", cfg)
 	if err != nil {
 		return false, fmt.Errorf("failed to connect to postgres: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	var exists bool
 	query := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
@@ -127,7 +213,7 @@ func GetInstalledModules(ctx context.Context, db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query modules: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var modules []string
 	for rows.Next() {
@@ -155,9 +241,9 @@ func CreateDatabase(ctx context.Context, dbname string, cfg *PGConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
-	query := fmt.Sprintf("CREATE DATABASE %s ENCODING 'UTF8'",
+	query := fmt.Sprintf("CREATE DATABASE %s ENCODING 'UTF8",
 		pq.QuoteIdentifier(dbname))
 
 	_, err = db.ExecContext(ctx, query)
@@ -175,7 +261,7 @@ func DropDatabase(ctx context.Context, dbname string, cfg *PGConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	// Terminate active connections
 	if err := terminateConnections(ctx, db, dbname); err != nil {
@@ -215,7 +301,7 @@ func CreateDatabaseFromTemplate(ctx context.Context, dbname, template string, cf
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	if err := terminateConnections(ctx, db, template); err != nil {
 		log.WithError(err).Warn("Failed to terminate template connections")
@@ -248,7 +334,7 @@ func RenameDatabase(ctx context.Context, oldName, newName string, cfg *PGConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	if err := terminateConnections(ctx, db, oldName); err != nil {
 		log.WithError(err).Warn("Failed to terminate connections")
@@ -282,7 +368,7 @@ func PingPostgres(ctx context.Context, cfg *PGConfig) error {
 	if err != nil {
 		return err
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	return db.PingContext(ctx)
 }
@@ -301,7 +387,7 @@ func IsInitialized(ctx context.Context, dbname string, cfg *PGConfig) (bool, err
 	if err != nil {
 		return false, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	var tableExists bool
 	query := `
@@ -345,7 +431,7 @@ func ListDatabases(ctx context.Context, cfg *PGConfig) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	query := `
 		SELECT datname FROM pg_database
@@ -358,7 +444,7 @@ func ListDatabases(ctx context.Context, cfg *PGConfig) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query databases: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var databases []string
 	for rows.Next() {
@@ -395,7 +481,7 @@ func GetDatabaseSize(ctx context.Context, dbname string, cfg *PGConfig) (string,
 	if err != nil {
 		return "", err
 	}
-	defer CloseDB(db)
+	defer func() { _ = CloseDB(db) }()
 
 	var size int64
 	query := "SELECT pg_database_size($1)"
@@ -459,7 +545,7 @@ func GetConfigParameter(ctx context.Context, db *sql.DB, key string) (string, er
 
 // IsValidDBName validates a PostgreSQL database name
 func IsValidDBName(name string) bool {
-	if len(name) == 0 || len(name) > 63 {
+	if len(name) == 0 || len(name) > constants.MaxDBNameLength {
 		return false
 	}
 
