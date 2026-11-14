@@ -14,6 +14,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Querier is the minimal interface required to query database sizes.
+type Querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// DatabaseSize holds a database name and its formatted size.
+type DatabaseSize struct {
+	Name string
+	Size string
+}
+
 // Global logger instance for backward compatibility
 var log = logger.NewLogger().GetLogger()
 
@@ -576,4 +587,43 @@ func isAlphaOrUnderscore(c rune) bool {
 
 func isAlphanumericOrUnderscore(c rune) bool {
 	return isAlphaOrUnderscore(c) || (c >= '0' && c <= '9')
+}
+
+// ListDatabasesWithSizes returns non-template user databases with sizes in a single query.
+func ListDatabasesWithSizes(ctx context.Context, q Querier) ([]DatabaseSize, error) {
+	query := `
+		SELECT datname, pg_database_size(datname)
+		FROM pg_database
+		WHERE datistemplate = false
+		  AND datname != 'postgres'
+		ORDER BY datname`
+	rows, err := q.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query databases: %w", err)
+	}
+	if rows == nil {
+		return []DatabaseSize{}, nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []DatabaseSize
+	for rows.Next() {
+		var name string
+		var sizeBytes int64
+		if err := rows.Scan(&name, &sizeBytes); err != nil {
+			return nil, fmt.Errorf("failed to scan database: %w", err)
+		}
+		out = append(out, DatabaseSize{Name: name, Size: formatBytes(sizeBytes)})
+	}
+	return out, rows.Err()
+}
+
+// ListDatabasesWithSizesConfig connects once and returns databases with sizes.
+func ListDatabasesWithSizesConfig(ctx context.Context, cfg *PGConfig) ([]DatabaseSize, error) {
+	dbConn, err := Connect(ctx, "postgres", cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer func() { _ = CloseDB(dbConn) }()
+	return ListDatabasesWithSizes(ctx, dbConn)
 }

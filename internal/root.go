@@ -63,6 +63,7 @@ to quickly create a Cobra application.`,
 	cmd.AddCommand(commands.NewStartOdooCmd(deps))
 	cmd.AddCommand(commands.NewVersionCmd(deps))
 	cmd.AddCommand(commands.NewInstallCmd(deps))
+	cmd.AddCommand(commands.NewUpdateCmd(deps))
 
 	for _, c := range cmd.Commands() {
 		c.SetOut(nil)
@@ -79,6 +80,7 @@ func Execute(ctx context.Context, args []string, out, errW io.Writer) int {
 		Config:     config.NewLoader(constants.DefaultConfigFile),
 		Runner:     odoo.NewExecRunner(),
 		Installer:  selfupdate.NewInstaller(info),
+		Updater:    selfupdate.NewUpdater(selfupdate.NewDefaultReleaseClient()),
 		Version:    info,
 		Executable: os.Executable,
 		Out:        out,
@@ -93,6 +95,9 @@ func Execute(ctx context.Context, args []string, out, errW io.Writer) int {
 	err := root.ExecuteContext(ctx)
 	if err == nil {
 		return 0
+	}
+	if errors.Is(err, selfupdate.ErrUpdateAvailable) {
+		return 10
 	}
 	if errors.Is(err, ErrUsage) || isUsageError(err) {
 		fmt.Fprintf(errW, "error: %v\n", err)

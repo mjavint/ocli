@@ -34,7 +34,10 @@ backup file and Odoo configuration.`,
 				f.DumpPath = cfg.DB.DumpPath
 			}
 
-			backupFile := utils.GetBackupFilePath(f.DumpPath, f.Database, cfg.DB.DumpFormat, false)
+			backupFile, err := utils.GetBackupFilePath(f.DumpPath, f.Database, cfg.DB.DumpFormat, false)
+			if err != nil {
+				return fmt.Errorf("Error preparing backup path: %v", err)
+			}
 			fmt.Fprintf(out, "Restoring database: %s from backup file: %s\n", f.NewDB, backupFile)
 
 			f.ForceSet = cmd.Flags().Changed("force")

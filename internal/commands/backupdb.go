@@ -37,7 +37,10 @@ the backup file in the specified directory.`,
 
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Backing up database: %s\n", f.Database)
-			dumpFile := utils.GetBackupFilePath(f.DumpPath, f.Database, f.DumpFormat, f.NoFilestore)
+			dumpFile, err := utils.GetBackupFilePath(f.DumpPath, f.Database, f.DumpFormat, f.NoFilestore)
+			if err != nil {
+				return fmt.Errorf("Error preparing backup path: %v", err)
+			}
 			cmdArgs := buildBackupArgs(f, dumpFile)
 			fmt.Fprintf(out, "Executing: %s %v\n", f.Bin, cmdArgs)
 

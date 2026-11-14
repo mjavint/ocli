@@ -46,9 +46,17 @@ func TestGetBackupFilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetBackupFilePath(tt.backupDir, tt.dbName, tt.backupFormat, tt.noFilestore)
+			got, err := GetBackupFilePath(tt.backupDir, tt.dbName, tt.backupFormat, tt.noFilestore)
+			if err != nil {
+				t.Fatalf("GetBackupFilePath() error = %v", err)
+			}
 			if got != tt.want {
 				t.Errorf("GetBackupFilePath() = %v, want %v", got, tt.want)
+			}
+
+			// Verify directory was created
+			if _, err := os.Stat(tt.backupDir); os.IsNotExist(err) {
+				t.Errorf("GetBackupFilePath() did not create directory: %v", tt.backupDir)
 			}
 		})
 	}
@@ -56,27 +64,37 @@ func TestGetBackupFilePath(t *testing.T) {
 
 func TestGetBackupFilePathCreatesDirectory(t *testing.T) {
 	tempDir := t.TempDir()
-	backupDir := filepath.Join(tempDir, "backups", "nested")
+	newDir := filepath.Join(tempDir, "backups", "nested")
 
-	result := GetBackupFilePath(backupDir, "test", "sql", false)
-	expected := filepath.Join(backupDir, "test.sql")
-
-	if result != expected {
-		t.Errorf("GetBackupFilePath() = %v, want %v", result, expected)
+	path, err := GetBackupFilePath(newDir, "test_db", "sql", false)
+	if err != nil {
+		t.Fatalf("GetBackupFilePath() error = %v", err)
 	}
 
-	// Check if directory was created
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		t.Errorf("Directory was not created: %v", backupDir)
+	if path == "" {
+		t.Error("GetBackupFilePath() returned empty string")
+	}
+
+	if _, err := os.Stat(newDir); os.IsNotExist(err) {
+		t.Errorf("GetBackupFilePath() did not create nested directory: %v", newDir)
+	}
+
+	expectedPath := filepath.Join(newDir, "test_db.sql")
+	if path != expectedPath {
+		t.Errorf("GetBackupFilePath() = %v, want %v", path, expectedPath)
 	}
 }
 
-func TestGetBackupFilePathInvalidDirectory(t *testing.T) {
-	// Try to create backup path in a read-only location (this will fail on permission issues)
-	// For a proper test, we'd need a mock filesystem or to test on a location we know fails
-	result := GetBackupFilePath("/root/invalid/path/that/doesnt/exist", "test", "sql", false)
-	if result != "" {
-		// On some systems this might work, so we just check the logic
-		t.Logf("Backup path returned: %v", result)
+func TestGetBackupFilePathError(t *testing.T) {
+	tempDir := t.TempDir()
+	// Create a file where a directory is expected to force MkdirAll failure.
+	blocker := filepath.Join(tempDir, "not-a-dir")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+
+	_, err := GetBackupFilePath(filepath.Join(blocker, "child"), "db", "sql", false)
+	if err == nil {
+		t.Fatal("GetBackupFilePath() error = nil, want error")
 	}
 }

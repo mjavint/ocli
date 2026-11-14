@@ -1,26 +1,12 @@
 # OCLI - Odoo Command Line Interface
 
-CLI tool for managing Odoo instances with a clean, SOLID architecture.
+CLI tool for managing Odoo instances.
 
 ## Features
 
-✅ **SOLID Principles**: Clean architecture following SOLID principles ✅ **Well
-Tested**: High test coverage (100% on core packages) ✅ **Type-Safe**: Comprehensive
-error handling with typed errors ✅ **Extensible**: Interface-based design for easy
-extension ✅ **Production Ready**: Zero lint errors, all tests passing
-
-## Architecture
-
-OCLI follows SOLID principles and Go best practices:
-
-- **Single Responsibility**: Each package has one clear purpose
-- **Open/Closed**: Extensible through interfaces
-- **Liskov Substitution**: Interface-based design
-- **Interface Segregation**: Focused, client-specific interfaces
-- **Dependency Inversion**: Depend on abstractions
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation. See
-[SOLID_IMPLEMENTATION.md](SOLID_IMPLEMENTATION.md) for implementation details.
+- Database and Odoo helper commands (`listdb`, `backupdb`, `restoredb`, `initdb`, etc.)
+- Self-management commands: `ocli install`, `ocli update`, `ocli version`
+- Go-based implementation with injectable command dependencies and test coverage on core packages
 
 ## Installation
 
@@ -28,6 +14,26 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation. 
 
 Download the latest binary for your platform from
 [Releases](https://github.com/mjavint/ocli/releases).
+
+### Install into PATH
+
+```bash
+./ocli install
+# or
+./ocli install --dir ~/.local/bin
+```
+
+`ocli install` copies the current executable to `~/.local/bin` by default (idempotent). If the destination is not in `PATH`, it prints a warning.
+
+### Update
+
+```bash
+ocli update --check
+ocli update
+ocli update --version v1.0.5
+```
+
+`ocli update` downloads the release asset for the current platform, verifies it against `checksums.txt` (SHA-256 required), and replaces the binary atomically. On Windows, only `--check` is supported.
 
 ### From Source
 
@@ -41,13 +47,19 @@ make build
 ## Usage
 
 ```bash
-# Start Odoo server
+# Show version
+./ocli version
+./ocli --version
+
+# Install/update
+./ocli install
+./ocli update --check
+
+# Odoo/database commands
 ./ocli start
-
-# Drop database
-./ocli dropdb -d database_name
-
-# Other commands
+./ocli listdb
+./ocli backupdb -d database_name
+./ocli restoredb -d database_name
 ./ocli --help
 ```
 
@@ -77,15 +89,12 @@ make fmt                # Format code with gofmt
 
 ## Test Coverage
 
-Current test coverage:
+Generate an up-to-date report with:
 
-- **pkg/errors**: 100.0%
-- **pkg/logger**: 100.0%
-- **pkg/utils**: 100.0%
-- **pkg/config**: 48.8%
-- **pkg/db**: 18.2%
-- **internal**: 76.9%
-- **internal/commands**: 21.2%
+```bash
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
 
 ### Format and Lint
 

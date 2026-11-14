@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,47 @@ func TestTerminateConnectionsContext(t *testing.T) {
 	_, err := Connect(ctx, "test", cfg)
 	if err == nil {
 		t.Error("Expected error when connecting with canceled context")
+	}
+}
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		in   int64
+		want string
+	}{
+		{0, "0 B"},
+		{1023, "1023 B"},
+		{1024, "1.00 KB"},
+		{1536, "1.50 KB"},
+		{1048576, "1.00 MB"},
+		{1073741824, "1.00 GB"},
+	}
+	for _, tt := range tests {
+		if got := formatBytes(tt.in); got != tt.want {
+			t.Errorf("formatBytes(%d) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+type fakeQuerier struct {
+	queryCalls int
+}
+
+func (f *fakeQuerier) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	f.queryCalls++
+	return nil, nil
+}
+
+func TestListDatabasesWithSizeOneQuery(t *testing.T) {
+	q := &fakeQuerier{}
+	got, err := ListDatabasesWithSizes(context.Background(), q)
+	if err != nil {
+		t.Fatalf("ListDatabasesWithSizes() error = %v", err)
+	}
+	if q.queryCalls != 1 {
+		t.Fatalf("queryCalls = %d, want 1", q.queryCalls)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len(got) = %d, want 0", len(got))
 	}
 }

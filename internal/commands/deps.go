@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/mjavint/ocli/internal/selfupdate"
 	"github.com/mjavint/ocli/internal/version"
 	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/pkg/db"
 	"github.com/spf13/cobra"
 )
 
@@ -21,15 +23,23 @@ type Installer interface {
 	Install(selfupdate.InstallOptions) (selfupdate.InstallResult, error)
 }
 
+// Updater updates the ocli binary from a release.
+type Updater interface {
+	Update(ctx context.Context, opts selfupdate.UpdateOptions) (selfupdate.UpdateResult, error)
+}
+
 // Deps holds the dependencies injected into every command.
 type Deps struct {
 	Config     ConfigLoader
 	Runner     odoo.Runner
 	Installer  Installer
+	Updater    Updater
 	Version    version.Info
 	Executable func() (string, error)
 	Out        io.Writer
 	Err        io.Writer
+	// ListDatabases lists databases with sizes (used by listdb; injectable for tests).
+	ListDatabases func(ctx context.Context, cfg *db.PGConfig) ([]db.DatabaseSize, error)
 }
 
 func (d Deps) stdout() io.Writer {

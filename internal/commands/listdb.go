@@ -1,9 +1,7 @@
 package commands
 
 import (
-	"context"
 	"fmt"
-	"io"
 
 	"github.com/mjavint/ocli/pkg/config"
 	"github.com/mjavint/ocli/pkg/db"
@@ -25,46 +23,46 @@ to quickly create a Cobra application.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
 			fmt.Fprintln(out, "listdb called")
+
+			lister := deps.ListDatabases
+			if lister == nil {
+				lister = db.ListDatabasesWithSizesConfig
+			}
+
 			if odooConfigFile == "" {
 				odooConfigFile = deps.cfg().Odoo.ConfigFile
 			}
 
-			dbConfig, err := config.LoadOdooDBParams(odooConfigFile)
-			if err != nil {
-				return fmt.Errorf("Error resolviendo configuración: %v", err)
+			var pgCfg *db.PGConfig
+			if deps.ListDatabases == nil {
+				dbConfig, err := config.LoadOdooDBParams(odooConfigFile)
+				if err != nil {
+					return fmt.Errorf("Error resolviendo configuración: %v", err)
+				}
+				pgCfg = &db.PGConfig{
+					Host:     dbConfig.Host,
+					Port:     dbConfig.Port,
+					User:     dbConfig.User,
+					Password: dbConfig.Password,
+				}
+			} else {
+				pgCfg = &db.PGConfig{}
 			}
-			pgCfg := &db.PGConfig{
-				Host:     dbConfig.Host,
-				Port:     dbConfig.Port,
-				User:     dbConfig.User,
-				Password: dbConfig.Password,
-			}
-			dblist, err := db.ListDatabases(cmd.Context(), pgCfg)
+
+			databases, err := lister(cmd.Context(), pgCfg)
 			if err != nil {
 				return fmt.Errorf("Error listing databases: %v", err)
 			}
-			if err := displayTable(cmd.Context(), dblist, pgCfg, out); err != nil {
-				return fmt.Errorf("Error displaying databases: %v", err)
+
+			fmt.Fprintf(out, "\nFound %d database(s):\n\n", len(databases))
+			for _, d := range databases {
+				fmt.Fprintf(out, "- %s (%s)\n", d.Name, d.Size)
 			}
+			fmt.Fprintln(out)
 			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&odooConfigFile, "config", "c", "", "Odoo configuration file path (odoo.conf)")
 	setCmdIO(cmd, deps)
 	return cmd
-}
-
-// displayTable shows results in table format.
-func displayTable(ctx context.Context, databases []string, pgCfg *db.PGConfig, out io.Writer) error {
-	fmt.Fprintf(out, "\nFound %d database(s):\n\n", len(databases))
-	for _, dbname := range databases {
-		size, err := db.GetDatabaseSize(ctx, dbname, pgCfg)
-		if err != nil {
-			return fmt.Errorf("error getting size for database %s: %w", dbname, err)
-		}
-		fmt.Fprintf(out, "- %s (%s)\n", dbname, size)
-	}
-
-	fmt.Fprintln(out)
-	return nil
 }
