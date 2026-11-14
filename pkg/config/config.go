@@ -1,9 +1,5 @@
 package config
 
-import (
-	"github.com/mjavint/ocli/pkg/constants"
-)
-
 // Config represents the application configuration
 type Config struct {
 	Odoo OdooConfig `mapstructure:"odoo"`
@@ -29,23 +25,6 @@ type DBConfig struct {
 	Port     int
 	User     string
 	Password string
-}
-
-// AppConfig is the global configuration instance (for backward compatibility)
-var AppConfig Config
-
-// LoadConfig loads the application configuration (legacy function)
-// This is maintained for backward compatibility
-func LoadConfig() {
-	manager := NewConfigManager(constants.DefaultConfigFile)
-	if err := manager.Load(); err != nil {
-		// Fallback to defaults on error
-		AppConfig = *manager.getDefaultConfig()
-		return
-	}
-	if manager.config != nil {
-		AppConfig = *manager.config
-	}
 }
 
 // LoadOdooDBParams extracts database parameters from Odoo config file (legacy function)

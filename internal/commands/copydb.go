@@ -2,23 +2,14 @@ package commands
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
 
-	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/internal/odoo"
 	"github.com/spf13/cobra"
 )
 
-// copydbCmd represents the copydb command
-func NewCopydbCmd() *cobra.Command {
-	var (
-		odooBin    string
-		configPath string
-		dbName     string
-		newName    string
-		force      bool
-		neutralize bool
-	)
+// NewCopydbCmd creates the copydb command.
+func NewCopydbCmd(deps Deps) *cobra.Command {
+	var f odooDBFlags
 	cmd := &cobra.Command{
 		Use:   "copydb",
 		Short: "Duplicate an Odoo database",
@@ -37,56 +28,45 @@ Example:
 
 The command will copy the database schema, all tables and data, and optionally
 the filestore directory associated with the database.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("copydb called")
-			//odoo-bin db -c config.conf duplicate db_name new_dbname
-			if odooBin == "" {
-				odooBin = config.AppConfig.Odoo.OdooBin
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "copydb called")
+			cfg := deps.cfg()
+			if f.Bin == "" {
+				f.Bin = cfg.Odoo.OdooBin
 			}
-			if configPath == "" {
-				configPath = config.AppConfig.Odoo.ConfigFile
+			if f.Config == "" {
+				f.Config = cfg.Odoo.ConfigFile
 			}
-			if dbName == "" {
-				log.Fatal("Database name is required. Use --database or -d to specify it.")
+			if f.Database == "" {
+				return fmt.Errorf("Database name is required. Use --database or -d to specify it.")
 			}
-			if newName == "" {
-				log.Fatal("New database name is required. Use --new-db or -n to specify it.")
-			}
-
-			// Execute odoo-bin db duplicate command
-			cmdArgs := []string{"db", "-c", configPath, "duplicate", dbName, newName}
-
-			if cmd.Flags().Changed("force") {
-				force = !force
-			}
-			if cmd.Flags().Changed("neutralize") {
-				neutralize = !neutralize
+			if f.NewDB == "" {
+				return fmt.Errorf("New database name is required. Use --new-db or -n to specify it.")
 			}
 
-			if !force {
-				cmdArgs = append(cmdArgs, "--force")
+			f.ForceSet = cmd.Flags().Changed("force")
+			f.NeutralizeSet = cmd.Flags().Changed("neutralize")
+			cmdArgs := buildCopyArgs(f)
+			fmt.Fprintf(out, "Executing: %s %v\n", f.Bin, cmdArgs)
+
+			runner := deps.Runner
+			if runner == nil {
+				runner = odoo.NewExecRunner()
 			}
-			if !neutralize {
-				cmdArgs = append(cmdArgs, "--neutralize")
+			if err := runner.Run(cmd.Context(), f.Bin, cmdArgs, odoo.RunOptions{Stdout: out, Stderr: cmd.ErrOrStderr()}); err != nil {
+				return fmt.Errorf("Error executing duplicate command: %v", err)
 			}
-
-			fmt.Printf("Executing: %s %v\n", odooBin, cmdArgs)
-
-			cmdExec := exec.Command(odooBin, cmdArgs...)
-
-			// Run the command
-			if err := cmdExec.Run(); err != nil {
-				log.Fatalf("Error executing duplicate command: %v", err)
-			}
-
-			fmt.Printf("Duplicate completed successfully: %s\n", newName)
+			fmt.Fprintf(out, "Duplicate completed successfully: %s\n", f.NewDB)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&odooBin, "bin", "b", "", "Path to the Odoo binary")
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Odoo configuration file path (odoo.conf)")
-	cmd.Flags().StringVarP(&dbName, "database", "d", "", "Database name to backup")
-	cmd.Flags().StringVarP(&newName, "new-db", "n", "", "New database name to restore to")
-	cmd.Flags().BoolVarP(&force, "force", "f", true, "Force restore even if the database already exists")
-	cmd.Flags().BoolVarP(&neutralize, "neutralize", "N", true, "Neutralize database after restore")
+	cmd.Flags().StringVarP(&f.Bin, "bin", "b", "", "Path to the Odoo binary")
+	cmd.Flags().StringVarP(&f.Config, "config", "c", "", "Odoo configuration file path (odoo.conf)")
+	cmd.Flags().StringVarP(&f.Database, "database", "d", "", "Database name to backup")
+	cmd.Flags().StringVarP(&f.NewDB, "new-db", "n", "", "New database name to restore to")
+	cmd.Flags().BoolVarP(&f.Force, "force", "f", true, "Force restore even if the database already exists")
+	cmd.Flags().BoolVarP(&f.Neutralize, "neutralize", "N", true, "Neutralize database after restore")
+	setCmdIO(cmd, deps)
 	return cmd
 }

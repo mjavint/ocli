@@ -2,21 +2,14 @@ package commands
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
 
-	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/internal/odoo"
 	"github.com/spf13/cobra"
 )
 
-// dropdbCmd represents the dropdb command
-func NewDropdbCmd() *cobra.Command {
-	var (
-		odooBin    string
-		configPath string
-		dbName     string
-	)
-
+// NewDropdbCmd creates the dropdb command.
+func NewDropdbCmd(deps Deps) *cobra.Command {
+	var f odooDBFlags
 	cmd := &cobra.Command{
 		Use:   "dropdb",
 		Short: "A brief description of your command",
@@ -26,34 +19,36 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("dropdb called")
-			//odoo-bin db -c /etc/odoo.conf drop db_name
-			if odooBin == "" {
-				odooBin = config.AppConfig.Odoo.OdooBin
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "dropdb called")
+			cfg := deps.cfg()
+			if f.Bin == "" {
+				f.Bin = cfg.Odoo.OdooBin
 			}
-			if configPath == "" {
-				configPath = config.AppConfig.Odoo.ConfigFile
+			if f.Config == "" {
+				f.Config = cfg.Odoo.ConfigFile
 			}
-			if dbName == "" {
-				log.Fatal("Database name is required. Use --database or -d to specify it.")
+			if f.Database == "" {
+				return fmt.Errorf("Database name is required. Use --database or -d to specify it.")
 			}
 
-			// Execute odoo-bin db drop command
-			cmdExec := exec.Command(odooBin, "db", "-c", configPath, "drop", dbName)
-
-			// Capture output
-			output, err := cmdExec.CombinedOutput()
+			cmdArgs := buildDropArgs(f)
+			runner := deps.Runner
+			if runner == nil {
+				runner = odoo.NewExecRunner()
+			}
+			output, err := runner.CombinedOutput(cmd.Context(), f.Bin, cmdArgs)
 			if err != nil {
-				log.Fatalf("Error executing drop command: %v\nOutput: %s", err, string(output))
+				return fmt.Errorf("Error executing drop command: %v\nOutput: %s", err, string(output))
 			}
-
-			fmt.Printf("Database drop completed successfully: %s\n", dbName)
+			fmt.Fprintf(out, "Database drop completed successfully: %s\n", f.Database)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&odooBin, "bin", "b", "", "Path to the Odoo binary")
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Odoo configuration file path (odoo.conf)")
-	cmd.Flags().StringVarP(&dbName, "database", "d", "", "Database name to backup")
+	cmd.Flags().StringVarP(&f.Bin, "bin", "b", "", "Path to the Odoo binary")
+	cmd.Flags().StringVarP(&f.Config, "config", "c", "", "Odoo configuration file path (odoo.conf)")
+	cmd.Flags().StringVarP(&f.Database, "database", "d", "", "Database name to backup")
+	setCmdIO(cmd, deps)
 	return cmd
-
 }

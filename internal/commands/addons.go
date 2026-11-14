@@ -3,45 +3,44 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/mjavint/ocli/pkg/config"
 	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
-func NewConfigAddonCmd() *cobra.Command {
-	var (
-		addons []string
-	)
+// NewConfigAddonCmd creates the addon command.
+func NewConfigAddonCmd(deps Deps) *cobra.Command {
+	var addons []string
 	cmd := &cobra.Command{
 		Use:   "addon",
 		Short: "Configuration Addon in projects",
 		Long:  `Configuration Addon in projects`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg := deps.cfg()
 			if len(addons) == 0 {
-				addons = config.AppConfig.Odoo.Addons
+				addons = cfg.Odoo.Addons
 			}
 			addonsPath := strings.Join(addons, ",")
-			if err := updateOdooConf(config.AppConfig.Odoo.ConfigFile, addonsPath); err != nil {
-				log.Fatal("failed to update odoo.conf: %w", err)
+			if err := updateOdooConf(cfg.Odoo.ConfigFile, addonsPath); err != nil {
+				return fmt.Errorf("failed to update odoo.conf: %w", err)
 			}
-			// Obtener directorio actual (funciona en todos los SO)
 			dir, err := os.Getwd()
 			if err != nil {
-				panic(fmt.Sprintf("Error obteniendo directorio actual: %v", err))
+				return fmt.Errorf("Error obteniendo directorio actual: %v", err)
 			}
 			pyrightConfigPath := filepath.Join(dir, "pyrightconfig.json")
 			if err := updatePyrightConfig(pyrightConfigPath, addonsPath); err != nil {
-				log.Fatal("failed to update pyrightconfig.json: %w", err)
+				return fmt.Errorf("failed to update pyrightconfig.json: %w", err)
 			}
-			fmt.Printf("📦 Addons paths detectados (%d total):\n", len(addons))
-			fmt.Printf("Successfully created %s\n", addonsPath)
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "📦 Addons paths detectados (%d total):\n", len(addons))
+			fmt.Fprintf(out, "Successfully created %s\n", addonsPath)
+			return nil
 		},
 	}
+	setCmdIO(cmd, deps)
 	return cmd
 }
 
@@ -55,7 +54,6 @@ func updateOdooConf(odooConfPath, newAddonsPath string) error {
 	lines := strings.Split(string(content), "\n")
 	updated := false
 
-	// Update existing addons_path or mark insertion point
 	for i, line := range lines {
 		if strings.HasPrefix(strings.TrimSpace(line), "addons_path") {
 			lines[i] = fmt.Sprintf("addons_path = %s", newAddonsPath)
@@ -64,7 +62,6 @@ func updateOdooConf(odooConfPath, newAddonsPath string) error {
 		}
 	}
 
-	// If not found, append to end
 	if !updated {
 		lines = append(lines, fmt.Sprintf("addons_path = %s", newAddonsPath))
 	}
@@ -80,12 +77,11 @@ func updatePyrightConfig(pyrightConfigPath, newAddonsPath string) error {
 		return fmt.Errorf("failed to read pyrightconfig.json: %w", err)
 	}
 
-	var config map[string]interface{}
-	if err := json.Unmarshal(content, &config); err != nil {
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(content, &cfg); err != nil {
 		return fmt.Errorf("failed to parse pyrightconfig.json: %w", err)
 	}
 
-	// Convert comma-separated addons path to slice
 	addonPaths := strings.Split(newAddonsPath, ",")
 	cleanPaths := make([]string, 0, len(addonPaths))
 	for _, p := range addonPaths {
@@ -94,11 +90,9 @@ func updatePyrightConfig(pyrightConfigPath, newAddonsPath string) error {
 		}
 	}
 
-	// Update extraPaths
-	config["extraPaths"] = cleanPaths
+	cfg["extraPaths"] = cleanPaths
 
-	// Write back with indentation
-	newContent, err := json.MarshalIndent(config, "", "    ")
+	newContent, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal pyrightconfig.json: %w", err)
 	}

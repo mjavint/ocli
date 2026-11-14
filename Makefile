@@ -5,7 +5,7 @@ BINARY_NAME=ocli
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR=bin
 GO=go
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -s -w"
+LDFLAGS=-ldflags "-X github.com/mjavint/ocli/internal/version.Version=$(VERSION) -s -w"
 
 # Colors for output
 GREEN=\033[0;32m

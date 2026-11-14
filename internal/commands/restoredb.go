@@ -2,89 +2,64 @@ package commands
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
 
-	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/internal/odoo"
 	"github.com/mjavint/ocli/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
-// restoredbCmd represents the restoredb command
-func NewRestoredbCmd() *cobra.Command {
-	var (
-		odooBin    string
-		configPath string
-		dbName     string
-		newName    string
-		backupDir  string
-		force      bool
-		neutralize bool
-	)
+// NewRestoredbCmd creates the restoredb command.
+func NewRestoredbCmd(deps Deps) *cobra.Command {
+	var f odooDBFlags
 	cmd := &cobra.Command{
 		Use:   "restoredb",
 		Short: "Restore an Odoo database from a backup file",
 		Long: `Restore an Odoo database from a backup file.
 This command executes the Odoo database restore operation using the specified
 backup file and Odoo configuration.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("restoredb called")
-			// odoo-bin db -c config.conf load new_db /path/to/backup.zip
-			if odooBin == "" {
-				odooBin = config.AppConfig.Odoo.OdooBin
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "restoredb called")
+			cfg := deps.cfg()
+			if f.Bin == "" {
+				f.Bin = cfg.Odoo.OdooBin
 			}
-			if configPath == "" {
-				configPath = config.AppConfig.Odoo.ConfigFile
+			if f.Config == "" {
+				f.Config = cfg.Odoo.ConfigFile
 			}
-
-			if newName == "" {
-				newName = dbName
+			if f.NewDB == "" {
+				f.NewDB = f.Database
 			}
-			if backupDir == "" {
-				backupDir = config.AppConfig.DB.DumpPath
-			}
-
-			backupFile := utils.GetBackupFilePath(backupDir, dbName, config.AppConfig.DB.DumpFormat, false)
-
-			fmt.Printf("Restoring database: %s from backup file: %s\n", newName, backupFile)
-
-			// Build command arguments: odoo-bin db -c config load new_db backup_file
-			cmdArgs := []string{"db", "-c", configPath, "load", newName, backupFile}
-
-			if cmd.Flags().Changed("force") {
-				force = !force
+			if f.DumpPath == "" {
+				f.DumpPath = cfg.DB.DumpPath
 			}
 
-			if cmd.Flags().Changed("neutralize") {
-				neutralize = !neutralize
+			backupFile := utils.GetBackupFilePath(f.DumpPath, f.Database, cfg.DB.DumpFormat, false)
+			fmt.Fprintf(out, "Restoring database: %s from backup file: %s\n", f.NewDB, backupFile)
+
+			f.ForceSet = cmd.Flags().Changed("force")
+			f.NeutralizeSet = cmd.Flags().Changed("neutralize")
+			cmdArgs := buildRestoreArgs(f, backupFile)
+			fmt.Fprintf(out, "Executing: %s %v\n", f.Bin, cmdArgs)
+
+			runner := deps.Runner
+			if runner == nil {
+				runner = odoo.NewExecRunner()
 			}
-
-			if !force {
-				cmdArgs = append(cmdArgs, "--force")
+			if err := runner.Run(cmd.Context(), f.Bin, cmdArgs, odoo.RunOptions{Stdout: out, Stderr: cmd.ErrOrStderr()}); err != nil {
+				return fmt.Errorf("Restore failed: %v", err)
 			}
-			if !neutralize {
-				cmdArgs = append(cmdArgs, "--neutralize")
-			}
-
-			fmt.Printf("Executing: %s %v\n", odooBin, cmdArgs)
-
-			// Execute odoo-bin db dump command
-			cmdExec := exec.Command(odooBin, cmdArgs...)
-
-			// Run the command
-			if err := cmdExec.Run(); err != nil {
-				log.Fatalf("Restore failed: %v", err)
-			}
-
-			fmt.Printf("Restore completed successfully: %s\n", backupFile)
+			fmt.Fprintf(out, "Restore completed successfully: %s\n", backupFile)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&odooBin, "bin", "b", "", "Path to the Odoo binary")
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Odoo configuration file path (odoo.conf)")
-	cmd.Flags().StringVarP(&newName, "new-db", "n", "", "New database name to restore to")
-	cmd.Flags().StringVarP(&dbName, "database", "d", "", "Database name to backup")
-	cmd.Flags().StringVarP(&backupDir, "dump-path", "D", "", "Directory to store the backup")
-	cmd.Flags().BoolVarP(&force, "force", "f", true, "Force restore even if the database already exists")
-	cmd.Flags().BoolVarP(&neutralize, "neutralize", "N", true, "Neutralize database after restore")
+	cmd.Flags().StringVarP(&f.Bin, "bin", "b", "", "Path to the Odoo binary")
+	cmd.Flags().StringVarP(&f.Config, "config", "c", "", "Odoo configuration file path (odoo.conf)")
+	cmd.Flags().StringVarP(&f.NewDB, "new-db", "n", "", "New database name to restore to")
+	cmd.Flags().StringVarP(&f.Database, "database", "d", "", "Database name to backup")
+	cmd.Flags().StringVarP(&f.DumpPath, "dump-path", "D", "", "Directory to store the backup")
+	cmd.Flags().BoolVarP(&f.Force, "force", "f", true, "Force restore even if the database already exists")
+	cmd.Flags().BoolVarP(&f.Neutralize, "neutralize", "N", true, "Neutralize database after restore")
+	setCmdIO(cmd, deps)
 	return cmd
 }

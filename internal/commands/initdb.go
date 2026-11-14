@@ -2,27 +2,14 @@ package commands
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
 
-	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/internal/odoo"
 	"github.com/spf13/cobra"
 )
 
-// initdbCmd represents the initdb command
-func NewInitDBCmd() *cobra.Command {
-	var (
-		odooBin    string
-		configPath string
-		dbName     string
-		// Opcionales
-		withDemo bool
-		force    bool
-		lang     string
-		username string
-		password string
-		country  string
-	)
+// NewInitDBCmd creates the initdb command.
+func NewInitDBCmd(deps Deps) *cobra.Command {
+	var f odooDBFlags
 	cmd := &cobra.Command{
 		Use:   "initdb",
 		Short: "A brief description of your command",
@@ -32,68 +19,46 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("initdb called")
-			//odoo-bin db -c /etc/odoo.conf init db_name
-			if odooBin == "" {
-				odooBin = config.AppConfig.Odoo.OdooBin
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "initdb called")
+			cfg := deps.cfg()
+			if f.Bin == "" {
+				f.Bin = cfg.Odoo.OdooBin
 			}
-			if configPath == "" {
-				configPath = config.AppConfig.Odoo.ConfigFile
+			if f.Config == "" {
+				f.Config = cfg.Odoo.ConfigFile
 			}
-			if dbName == "" {
-				log.Fatal("Database name is required. Use --database or -d to specify it.")
-			}
-
-			// Build command arguments dynamically based on optional flags
-			cmdArgs := []string{"db", "-c", configPath, "init", dbName}
-			// Adjust withDemo flag - if user provides --without-demo, set withDemo to true
-			if cmd.Flags().Changed("with-demo") {
-				withDemo = !withDemo
-			}
-			if !withDemo {
-				cmdArgs = append(cmdArgs, "--with-demo")
+			if f.Database == "" {
+				return fmt.Errorf("Database name is required. Use --database or -d to specify it.")
 			}
 
-			if cmd.Flags().Changed("force") {
-				force = !force
-			}
-			if !force {
-				cmdArgs = append(cmdArgs, "--force")
-			}
-			if lang != "" {
-				cmdArgs = append(cmdArgs, "--language="+lang)
-			}
-			if username != "" {
-				cmdArgs = append(cmdArgs, "--username="+username)
-			}
-			if password != "" {
-				cmdArgs = append(cmdArgs, "--password="+password)
-			}
-			if country != "" {
-				cmdArgs = append(cmdArgs, "--country="+country)
-			}
+			f.WithDemoSet = cmd.Flags().Changed("with-demo")
+			f.ForceSet = cmd.Flags().Changed("force")
+			cmdArgs := buildInitDBArgs(f)
+			fmt.Fprintf(out, "Executing command: %s %v\n", f.Bin, cmdArgs)
 
-			// Execute odoo-bin db init command with dynamically built arguments
-			fmt.Printf("Executing command: %s %v\n", odooBin, cmdArgs)
-			cmdExec := exec.Command(odooBin, cmdArgs...)
-			// Capture output
-			output, err := cmdExec.CombinedOutput()
+			runner := deps.Runner
+			if runner == nil {
+				runner = odoo.NewExecRunner()
+			}
+			output, err := runner.CombinedOutput(cmd.Context(), f.Bin, cmdArgs)
 			if err != nil {
-				log.Fatalf("Error executing init command: %v\nOutput: %s", err, string(output))
+				return fmt.Errorf("Error executing init command: %v\nOutput: %s", err, string(output))
 			}
-
-			fmt.Printf("Database init completed successfully: %s\n", dbName)
+			fmt.Fprintf(out, "Database init completed successfully: %s\n", f.Database)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&odooBin, "bin", "b", "", "Path to the Odoo binary")
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Odoo configuration file path (odoo.conf)")
-	cmd.Flags().StringVarP(&dbName, "database", "d", "", "Database name to backup")
-	cmd.Flags().BoolVar(&withDemo, "with-demo", true, "Load demo data")
-	cmd.Flags().BoolVar(&force, "force", true, "Force database creation if it already exists")
-	cmd.Flags().StringVar(&lang, "lang", "", "Language code for the new database")
-	cmd.Flags().StringVar(&username, "username", "", "Administrator username")
-	cmd.Flags().StringVar(&password, "password", "", "Administrator password")
-	cmd.Flags().StringVar(&country, "country", "", "Country code for localization")
+	cmd.Flags().StringVarP(&f.Bin, "bin", "b", "", "Path to the Odoo binary")
+	cmd.Flags().StringVarP(&f.Config, "config", "c", "", "Odoo configuration file path (odoo.conf)")
+	cmd.Flags().StringVarP(&f.Database, "database", "d", "", "Database name to backup")
+	cmd.Flags().BoolVar(&f.WithDemo, "with-demo", true, "Load demo data")
+	cmd.Flags().BoolVar(&f.Force, "force", true, "Force database creation if it already exists")
+	cmd.Flags().StringVar(&f.Language, "lang", "", "Language code for the new database")
+	cmd.Flags().StringVar(&f.Username, "username", "", "Administrator username")
+	cmd.Flags().StringVar(&f.Password, "password", "", "Administrator password")
+	cmd.Flags().StringVar(&f.Country, "country", "", "Country code for localization")
+	setCmdIO(cmd, deps)
 	return cmd
 }

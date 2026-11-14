@@ -36,3 +36,6 @@ Thumbs.db
 # Temporary files
 *.log
 *.tmp
+
+# Ai
+.opencode/

@@ -2,22 +2,14 @@ package commands
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
 
-	"github.com/mjavint/ocli/pkg/config"
+	"github.com/mjavint/ocli/internal/odoo"
 	"github.com/spf13/cobra"
 )
 
-// renamedbCmd represents the renamedb command
-func NewRenamedbCmd() *cobra.Command {
-	var (
-		odooBin    string
-		configPath string
-		dbName     string
-		newName    string
-		force      bool
-	)
+// NewRenamedbCmd creates the renamedb command.
+func NewRenamedbCmd(deps Deps) *cobra.Command {
+	var f odooDBFlags
 	cmd := &cobra.Command{
 		Use:   "renamedb",
 		Short: "Rename an Odoo database",
@@ -27,43 +19,41 @@ and performs a database rename operation.
 
 Example:
   ocli renamedb mydb_old mydb_new`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("db called")
-			// odoo-bin db -c /etc/odoo.conf rename db_name new_name
-			if odooBin == "" {
-				odooBin = config.AppConfig.Odoo.OdooBin
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "db called")
+			cfg := deps.cfg()
+			if f.Bin == "" {
+				f.Bin = cfg.Odoo.OdooBin
 			}
-			if configPath == "" {
-				configPath = config.AppConfig.Odoo.ConfigFile
+			if f.Config == "" {
+				f.Config = cfg.Odoo.ConfigFile
 			}
-			if dbName == "" {
-				log.Fatal("Database name is required. Use --database or -d to specify it.")
+			if f.Database == "" {
+				return fmt.Errorf("Database name is required. Use --database or -d to specify it.")
 			}
-			if newName == "" {
-				log.Fatal("New database name is required. Use --new-db or -n to specify it.")
-			}
-
-			// Execute odoo-bin db duplicate command
-			cmdArgs := []string{"db", "-c", configPath, "rename", dbName, newName}
-
-			if condition := cmd.Flags().Changed("force"); condition {
-				cmdArgs = append(cmdArgs, "--force")
+			if f.NewDB == "" {
+				return fmt.Errorf("New database name is required. Use --new-db or -n to specify it.")
 			}
 
-			cmdExec := exec.Command(odooBin, cmdArgs...)
-
-			// Run the command
-			if err := cmdExec.Run(); err != nil {
-				log.Fatalf("Rename failed: %v", err)
+			f.ForceSet = cmd.Flags().Changed("force")
+			cmdArgs := buildRenameArgs(f)
+			runner := deps.Runner
+			if runner == nil {
+				runner = odoo.NewExecRunner()
 			}
-
-			fmt.Printf("Rename completed successfully: %s\n", newName)
+			if err := runner.Run(cmd.Context(), f.Bin, cmdArgs, odoo.RunOptions{Stdout: deps.stdout(), Stderr: deps.stderr()}); err != nil {
+				return fmt.Errorf("Rename failed: %v", err)
+			}
+			fmt.Fprintf(out, "Rename completed successfully: %s\n", f.NewDB)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&odooBin, "bin", "b", "", "Path to the Odoo binary")
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Odoo configuration file path (odoo.conf)")
-	cmd.Flags().StringVarP(&newName, "new-db", "n", "", "New database name to restore to")
-	cmd.Flags().StringVarP(&dbName, "database", "d", "", "Database name to backup")
-	cmd.Flags().BoolVarP(&force, "force", "f", true, "Force restore even if the database already exists")
+	cmd.Flags().StringVarP(&f.Bin, "bin", "b", "", "Path to the Odoo binary")
+	cmd.Flags().StringVarP(&f.Config, "config", "c", "", "Odoo configuration file path (odoo.conf)")
+	cmd.Flags().StringVarP(&f.NewDB, "new-db", "n", "", "New database name to restore to")
+	cmd.Flags().StringVarP(&f.Database, "database", "d", "", "Database name to backup")
+	cmd.Flags().BoolVarP(&f.Force, "force", "f", true, "Force restore even if the database already exists")
+	setCmdIO(cmd, deps)
 	return cmd
 }

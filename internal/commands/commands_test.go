@@ -22,7 +22,7 @@ func TestOdooStructure(t *testing.T) {
 }
 
 func TestNewStartOdooCmd(t *testing.T) {
-	cmd := NewStartOdooCmd()
+	cmd := NewStartOdooCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewStartOdooCmd() returned nil")
@@ -38,7 +38,7 @@ func TestNewStartOdooCmd(t *testing.T) {
 }
 
 func TestNewInitCmd(t *testing.T) {
-	cmd := NewInitCmd()
+	cmd := NewInitCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewInitCmd() returned nil")
@@ -50,7 +50,7 @@ func TestNewInitCmd(t *testing.T) {
 }
 
 func TestNewDropdbCmd(t *testing.T) {
-	cmd := NewDropdbCmd()
+	cmd := NewDropdbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewDropdbCmd() returned nil")
@@ -62,7 +62,7 @@ func TestNewDropdbCmd(t *testing.T) {
 }
 
 func TestNewListdbCmd(t *testing.T) {
-	cmd := NewListdbCmd()
+	cmd := NewListdbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewListdbCmd() returned nil")
@@ -74,7 +74,7 @@ func TestNewListdbCmd(t *testing.T) {
 }
 
 func TestNewInitDBCmd(t *testing.T) {
-	cmd := NewInitDBCmd()
+	cmd := NewInitDBCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewInitDBCmd() returned nil")
@@ -86,7 +86,7 @@ func TestNewInitDBCmd(t *testing.T) {
 }
 
 func TestNewCopydbCmd(t *testing.T) {
-	cmd := NewCopydbCmd()
+	cmd := NewCopydbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewCopydbCmd() returned nil")
@@ -98,7 +98,7 @@ func TestNewCopydbCmd(t *testing.T) {
 }
 
 func TestNewRenamedbCmd(t *testing.T) {
-	cmd := NewRenamedbCmd()
+	cmd := NewRenamedbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewRenamedbCmd() returned nil")
@@ -110,7 +110,7 @@ func TestNewRenamedbCmd(t *testing.T) {
 }
 
 func TestNewBackupdbCmd(t *testing.T) {
-	cmd := NewBackupdbCmd()
+	cmd := NewBackupdbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewBackupdbCmd() returned nil")
@@ -122,7 +122,7 @@ func TestNewBackupdbCmd(t *testing.T) {
 }
 
 func TestNewRestoredbCmd(t *testing.T) {
-	cmd := NewRestoredbCmd()
+	cmd := NewRestoredbCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewRestoredbCmd() returned nil")
@@ -134,7 +134,7 @@ func TestNewRestoredbCmd(t *testing.T) {
 }
 
 func TestNewConfigAddonCmd(t *testing.T) {
-	cmd := NewConfigAddonCmd()
+	cmd := NewConfigAddonCmd(Deps{})
 
 	if cmd == nil {
 		t.Fatal("NewConfigAddonCmd() returned nil")

@@ -2,14 +2,13 @@ package commands
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
-func NewInitCmd() *cobra.Command {
+// NewInitCmd creates the init command.
+func NewInitCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "A brief description of your command",
@@ -17,15 +16,13 @@ func NewInitCmd() *cobra.Command {
 
 		This command creates a default configuration file that you can customize
 		according to your project needs.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			configFile := "ocli.yml"
 
-			// Check if config file already exists
 			if _, err := os.Stat(configFile); err == nil {
-				log.Fatalf("Config file %s already exists", configFile)
+				return fmt.Errorf("Config file %s already exists", configFile)
 			}
 
-			// Default configuration content
 			defaultConfig := `odoo:
   config_file: /workspace/odoo.conf
   odoo_bin: /workspace/odoo/odoo-bin
@@ -37,13 +34,14 @@ func NewInitCmd() *cobra.Command {
 db:
   dump_path: /workspace/dbs
   dump_format: zip`
-			// Write config file
 			if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {
-				log.Fatalf("failed to create config file: %v", err)
+				return fmt.Errorf("failed to create config file: %v", err)
 			}
 
-			fmt.Printf("Successfully created %s\n", configFile)
+			fmt.Fprintf(cmd.OutOrStdout(), "Successfully created %s\n", configFile)
+			return nil
 		},
 	}
+	setCmdIO(cmd, deps)
 	return cmd
 }

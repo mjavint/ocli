@@ -1,13 +1,8 @@
 package main
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestMainPackage(t *testing.T) {
-	// Test that main package compiles
-	// We can't easily test the main() function directly
-	// as it calls config.LoadConfig() which requires a config file
-	// This test ensures the package structure is correct
-	t.Log("Main package structure is valid")
+	// Main is now a thin wrapper over internal.Execute; keep package compilable.
+	t.Log("main package structure valid")
 }
