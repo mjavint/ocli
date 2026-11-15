@@ -47,14 +47,25 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build binaries
+        env:
+          CGO_ENABLED: "0"
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           make install
           make build-all
 
+      - name: Smoke test Linux binaries
+        run: |
+          ./bin/ocli-linux-amd64 --help >/dev/null
+          ./bin/ocli-linux-amd64 version >/dev/null || ./bin/ocli-linux-amd64 --version >/dev/null
+
       - name: Create checksums
         run: |
           cd bin
-          sha256sum * > checksums.txt
+          sha256sum ocli-* > checksums.txt
+          ls -la
+          echo "--- checksums.txt ---"
+          cat checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

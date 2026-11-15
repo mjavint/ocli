@@ -5,6 +5,7 @@ BINARY_NAME=ocli
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR=bin
 GO=go
+CGO_ENABLED?=0
 LDFLAGS=-ldflags "-X github.com/mjavint/ocli/internal/version.Version=$(VERSION) -s -w"
 
 # Colors for output
@@ -25,7 +26,7 @@ install: ## Install dependencies
 
 build: ## Build for current platform
 	@echo "$(GREEN)Building $(BINARY_NAME) for current platform...$(NC)"
-	$(GO) build $(LDFLAGS) -o $(BINARY_NAME) .
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(LDFLAGS) -o $(BINARY_NAME) .
 	@echo "$(GREEN)Build complete: $(BINARY_NAME)$(NC)"
 
 build-all: build-linux build-darwin build-windows ## Build for all platforms (64-bit)
@@ -34,23 +35,23 @@ build-all: build-linux build-darwin build-windows ## Build for all platforms (64
 build-linux: ## Build for Linux (amd64 and arm64)
 	@echo "$(GREEN)Building for Linux amd64...$(NC)"
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
 	@echo "$(GREEN)Building for Linux arm64...$(NC)"
-	GOOS=linux GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 .
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 .
 	@echo "$(GREEN)Linux builds complete$(NC)"
 
 build-darwin: ## Build for macOS (amd64 and arm64)
 	@echo "$(GREEN)Building for macOS amd64...$(NC)"
 	@mkdir -p $(BUILD_DIR)
-	GOOS=darwin GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
 	@echo "$(GREEN)Building for macOS arm64...$(NC)"
-	GOOS=darwin GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
 	@echo "$(GREEN)macOS builds complete$(NC)"
 
 build-windows: ## Build for Windows (amd64)
 	@echo "$(GREEN)Building for Windows amd64...$(NC)"
 	@mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe .
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe .
 	@echo "$(GREEN)Windows build complete: $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe$(NC)"
 
 test: ## Run tests
